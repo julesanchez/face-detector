@@ -1,0 +1,148 @@
+<html>
+<head>
+<link href='http://fonts.googleapis.com/css?family=Just+Me+Again+Down+Here' rel='stylesheet' type='text/css'>
+<link type="text/css" href="css/style.css" rel="stylesheet" />
+<link type="text/css" rel="stylesheet" href="http://fonts.googleapis.com/css?family=Oregano">
+<title>Face Detection</title>
+</head>
+<body>
+	<div id="body-wrapper">
+	<h1><img src="images/logo.png" alt="face detector" title="face detector" /></h1>
+
+	<div class="photos" style="display:none;">
+		<div class="title">&#10003;&nbsp; TESTED PHOTOS</div>
+		<div class="wrap-photos">
+			<div id="loading"></div>
+			<div id="tested-photos"></div>
+		</div>
+	</div>
+
+	<div class="new-photo">
+		<div class="title">+ MAKE A NEW TEST</div><br/>
+		<div class="add new-url">
+			Url : <input type="text" value="" id="user-url" placeholder="Enter your photo url here" /><br/>
+			<span id="test-url" class="cta">TEST THIS URL</span>
+		</div>
+		
+		<div class="add send">
+			<div id="drop-files" ondragover="return false">Drop your image Here</div>
+		</div>
+
+		<div class="add flickr">
+			<img src="images/flickr.png" style="margin-bottom:20px;margin-top:20px;"/><br/>
+			<div id="flick-photo" class="cta">GET FROM FLICKR</div>
+		</div>
+	</div>
+</div>
+<div id="footer">
+	FaceDetector is licensed under a Creative Commons Attribution-NonCommercial 3.0 Unported License. <br/>
+		<a rel="license" href="http://creativecommons.org/licenses/by-nc/3.0/" style="padding-top:10px;"><img alt="Creative Commons License" style="border-width:0" src="http://i.creativecommons.org/l/by-nc/3.0/88x31.png" /></a>
+</div>
+
+<script type="text/javascript" src="js/jquery-1.9.1.min.js"></script>
+<script type="text/javascript">
+	$(function(){
+		var id = 0;
+		var offset_flickr = 0;
+
+		function getFlickr(){
+			$.ajax({
+				url: 'http://api.flickr.com/services/rest/',
+				data : {
+					method: 'flickr.photos.getRecent',
+					api_key:'#YOUR_FLICKR_API_KEY_HERE#',
+					extras:'url_m',
+					per_page:1,
+					format:'json',
+					page:offset_flickr
+				},
+				success: function(data){
+					result = JSON.parse(data.replace("jsonFlickrApi(",'').replace(")",""));
+					hasFace(result.photos.photo[0].url_m);
+				}
+
+			});
+			offset_flickr++;
+		}
+
+		function hasFace(fileurl){
+			var canvas = document.createElement("canvas");
+			if (id == 0){
+				$('.photos').show();
+			}
+			$.ajax({
+				url: 'php/convertImage.php',
+				data : {url: fileurl},
+				type: "POST",
+				success: function(data) {
+					startDetect(data, canvas);
+				}
+			});
+		}
+
+		function startDetect(data, canvas){
+			var img_id = id;
+			id++;
+			var image = new Image();
+			image.src = data;
+			image.onload = function(){
+				var ratio = (image.width > image.height) ? "landscape" : "portrait";
+				$('#loading').prepend("<div class='img "+ ratio +"' style='background-image:url(" + data + ");' rel=" + img_id + " data-ratio='"+ ratio +"' ></div>");
+				var worker = new Worker('js/detect-face.js?151151');
+				worker.addEventListener('message', complete, false);
+				var ctx = canvas.getContext('2d');
+				canvas.width = image.width;
+				canvas.height = image.height;
+				ctx.drawImage(image,0,0);
+				worker.postMessage({
+					'imagedata': ctx.getImageData(0,0,image.width,image.height),
+					'image_id':img_id
+				});
+			};
+		}
+
+		var complete = function(e){
+				if (e.data.status == "complete"){
+					var face_class = (e.data.objects) ? "face" : "other";
+					var ratio = $('.img[rel='+e.data.image_id+']').attr('data-ratio');
+					$('#tested-photos').prepend("<div style='background-image:"+ $('.img[rel='+e.data.image_id+']').css('background-image') + ";' class='img "+face_class+" "+ratio+"' ></div>");
+					$('#loading .img[rel='+e.data.image_id+']').remove();
+
+				}
+			};
+
+		jQuery.event.props.push('dataTransfer');
+
+		var filedrag = $('#drop-files');
+		filedrag.bind("drop",function(e){
+			e.preventDefault();
+			var file = e.dataTransfer.files[0];
+			var fileReader = new FileReader();
+			
+			fileReader.onload = (function(f) {
+				return function(e) { 
+					if (id == 0){
+						$('.photos').show();
+					}
+					var canvas = document.createElement("canvas");
+					startDetect(this.result, canvas);
+				};
+			})(file);
+			fileReader.readAsDataURL(file);
+
+		});
+
+
+		$('#test-url').click(function(e){
+			hasFace($('#user-url').val());
+			$('#user-url').val('');
+		});
+
+		$('#flick-photo').click(function(e){
+			getFlickr();
+		});
+
+	});
+</script>
+</body>
+</html>
