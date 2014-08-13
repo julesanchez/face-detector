@@ -47,18 +47,20 @@
 
 		function getFlickr(){
 			$.ajax({
-				url: 'http://api.flickr.com/services/rest/',
+				url: 'https://api.flickr.com/services/rest/',
 				data : {
 					method: 'flickr.photos.getRecent',
 					api_key:'#YOUR_FLICKR_API_KEY_HERE#',
 					extras:'url_m',
 					per_page:1,
 					format:'json',
+					nojsoncallback:1,
 					page:offset_flickr
 				},
 				success: function(data){
-					result = JSON.parse(data.replace("jsonFlickrApi(",'').replace(")",""));
-					hasFace(result.photos.photo[0].url_m);
+					if (data.photos.photo.length > 0){
+						hasFace(data.photos.photo[0].url_m);
+					}
 				}
 
 			});
